@@ -1,16 +1,26 @@
-FROM node:20.11.1-bookworm
-MAINTAINER Daniel Sobe <daniel.sobe@sorben.com>
+########### build container
+FROM node:24 AS backendbuild
+WORKDIR /app
 
-# docker build -f docker/Dockerfile -t webcaptioner-ng-back .
-# docker build -f docker/Dockerfile -t webcaptioner-ng-back . --no-cache
+COPY package*.json ./
+RUN npm ci
 
-RUN mkdir -p /webcaptioner-ng-back/src
+COPY tsconfig.json ./
+ADD src/ ./src/
+RUN npm run build
+# RUN ls -l
 
-COPY package.json package-lock.json tsconfig.json /webcaptioner-ng-back/
-COPY src    /webcaptioner-ng-back/src
+########### deployment container
+FROM node:24
+WORKDIR /app
 
-RUN cd webcaptioner-ng-back && npm install
+COPY package*.json ./
+RUN npm ci --omit=dev
 
-COPY docker/startme.sh /
+COPY --chown=1000:1000 --from=backendbuild /app/dist ./dist
 
-CMD ["/bin/bash", "-c", "/startme.sh"] 
+USER 1000
+
+ENV NODE_ENV=production
+
+CMD ["node", "dist/index.js"]

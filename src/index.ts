@@ -173,7 +173,7 @@ connectDB().then(async () => {
   }
 })
 
-const PORT = process.env.PORT
+const PORT = process.env.WEBCAPTIONER_BACKEND_PORT
 
 app.get('/', (request: Request, response: Response) => {
   response.status(200).send('Hello World')
