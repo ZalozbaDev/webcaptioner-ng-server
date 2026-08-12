@@ -1,5 +1,26 @@
 import { Request, Response } from 'express'
-import { loginWithPassword, refreshUserToken } from '../helper/keycloak'
+import { User } from '../models/user'
+import { createToken, verifyPassword } from '../helper/auth'
+import {
+  isKeycloakConfigured,
+  loginWithPassword,
+  refreshUserToken,
+} from '../helper/keycloak'
+
+const loginWithDatabase = async (email: string, password: string) => {
+  const user = await User.findOne({ email }).select('_id password role').exec()
+
+  if (!user?.password) {
+    throw new Error('INVALID_CREDENTIALS')
+  }
+
+  const passwordMatch = await verifyPassword(password, user.password)
+  if (!passwordMatch) {
+    throw new Error('INVALID_CREDENTIALS')
+  }
+
+  return createToken({ email, id: user._id, role: user.role })
+}
 
 export const login = async (req: Request, res: Response) => {
   const { email, password } = req.body
@@ -9,12 +30,17 @@ export const login = async (req: Request, res: Response) => {
   }
 
   try {
-    const tokens = await loginWithPassword(email, password)
-    return res.json({
-      token: tokens.access_token,
-      refreshToken: tokens.refresh_token,
-      expiresIn: tokens.expires_in,
-    })
+    if (isKeycloakConfigured()) {
+      const tokens = await loginWithPassword(email, password)
+      return res.json({
+        token: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        expiresIn: tokens.expires_in,
+      })
+    }
+
+    const token = await loginWithDatabase(email, password)
+    return res.json({ token })
   } catch (error) {
     if ((error as Error).message === 'INVALID_CREDENTIALS') {
       return res.status(401).json({ message: 'Invalid email or password.' })
@@ -28,6 +54,10 @@ export const refreshToken = async (req: Request, res: Response) => {
 
   if (!token) {
     return res.status(400).json({ message: 'Refresh token is required.' })
+  }
+
+  if (!isKeycloakConfigured()) {
+    return res.status(401).json({ message: 'Invalid refresh token.' })
   }
 
   try {

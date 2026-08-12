@@ -15,6 +15,14 @@ const getKeycloakUrl = () => process.env.KEYCLOAK_URL?.replace(/\/$/, '') ?? ''
 const getRealm = () => process.env.KEYCLOAK_REALM ?? ''
 const getIssuer = () => `${getKeycloakUrl()}/realms/${getRealm()}`
 
+export const isKeycloakConfigured = () =>
+  Boolean(
+    process.env.KEYCLOAK_URL &&
+      process.env.KEYCLOAK_REALM &&
+      process.env.KEYCLOAK_CLIENT_ID &&
+      process.env.KEYCLOAK_CLIENT_SECRET,
+  )
+
 let jwks: ReturnType<typeof jwksClient> | null = null
 
 const getJwksClient = () => {
