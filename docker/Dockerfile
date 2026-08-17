@@ -18,9 +18,11 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 COPY --chown=1000:1000 --from=backendbuild /app/dist ./dist
+COPY --chown=1000:1000 config ./config
 
 USER 1000
 
 ENV NODE_ENV=production
+ENV CONFIG=/app/config
 
 CMD ["node", "dist/index.js"]

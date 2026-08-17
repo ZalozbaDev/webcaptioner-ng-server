@@ -1,0 +1,74 @@
+services:
+  mongo:
+    image: mongo:8.0.4-noble
+    ports:
+      - "27017:27017"
+    restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=root
+      - MONGO_INITDB_ROOT_PASSWORD=rootpass
+      - MONGOSH_FORCE_DISABLE_TELEMETRY_FOR_TESTING=1
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - webcaptioner-local
+
+  webcaptioner-server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    ports:
+      - "4000:4000"
+    restart: unless-stopped
+    depends_on:
+      - mongo
+    environment:
+      - WEBCAPTIONER_BACKEND_PORT=4000
+      - MONGODB_USERNAME=webcaptioner_app
+      - MONGODB_PASSWORD=localpass123
+      - MONGODB_HOST=mongo:27017
+      - MONGODB_DATABASE=webcaptioner
+      - JWT_SECRET_KEY=local-dev-secret
+      - FREE_PASSWORD=Test1234
+      - DB_ADMIN_FIRSTNAME=Admin
+      - DB_ADMIN_LASTNAME=Local
+      - DB_ADMIN_EMAIL=admin@local.dev
+      - DB_ADMIN_PASSWORD=admin123
+      - SOTRA_SERVER_CTRANSLATE_URL=http://host.docker.internal:3005
+      - SOTRA_SERVER_FAIRSEQ_URL=http://host.docker.internal:3000
+      - CONFIG=/app/config
+      - BAMBORAK_SERVER=http://host.docker.internal:8080
+    volumes:
+      - ../config:/app/config
+    networks:
+      - webcaptioner-local
+
+  mongo-init:
+    image: mongo:8.0.4-noble
+    depends_on:
+      - mongo
+    restart: "no"
+    environment:
+      - MONGOSH_FORCE_DISABLE_TELEMETRY_FOR_TESTING=1
+    entrypoint: >
+      mongosh --host mongo -u root -p rootpass --authenticationDatabase admin --eval "
+        db = db.getSiblingDB('webcaptioner');
+        if (!db.getUser('webcaptioner_app')) {
+          db.createUser({
+            user: 'webcaptioner_app',
+            pwd: 'localpass123',
+            roles: [{ role: 'readWrite', db: 'webcaptioner' }]
+          });
+          print('Created user webcaptioner_app');
+        } else {
+          print('User already exists');
+        }
+      "
+    networks:
+      - webcaptioner-local
+
+volumes:
+  mongo-data:
+
+networks:
+  webcaptioner-local:

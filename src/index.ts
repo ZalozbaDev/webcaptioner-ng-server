@@ -33,6 +33,7 @@ import {
 } from './routes/bamborak'
 import { AudioRecord } from './models/audio-record'
 import { getAudioCast } from './controllers/audio-record'
+import { findVoskModel, loadVoskModels } from './helper/vosk-models'
 dayjs.extend(utc)
 const cors = require('cors')
 
@@ -201,11 +202,33 @@ app.get('/bamborak-speakers', (_: Request, response: Response) => {
   getSpeakers(response)
 })
 
+app.get('/vosk-models', (_: Request, response: Response) => {
+  const models = loadVoskModels().map(
+    ({ name, description, path, transcriptLanguage }) => ({
+      name,
+      description,
+      path,
+      transcriptLanguage,
+    }),
+  )
+  response.status(200).json(models)
+})
+
 app.ws('/vosk', async (ws, req) => {
   console.log('Connecting ...')
-  const webSocket = new WebSocket(process.env.VOSK_SERVER_URL!)
-  webSocket.binaryType = 'arraybuffer'
   const recordId = req.query.recordId as string
+  const modelId =
+    typeof req.query.model === 'string' ? req.query.model : undefined
+  const selectedModel = findVoskModel(modelId)
+  if (!selectedModel) {
+    console.error('No vosk model configured')
+    ws.close()
+    return
+  }
+  const voskUrl = selectedModel.voskUrl
+
+  const webSocket = new WebSocket(voskUrl)
+  webSocket.binaryType = 'arraybuffer'
 
   // // Get authorization token from query params
   // const token = req.query.token as string
@@ -227,13 +250,14 @@ app.ws('/vosk', async (ws, req) => {
   }
 
   webSocket.onmessage = async event => {
+    // console.log(event.data)
     ws.send(event.data)
 
     // Parse the message and save to audio record if it's a transcription
     try {
       const data = JSON.parse(event.data.toString())
       if (!recordId) return
-      console.log(data)
+      // console.log(data)
 
       if (typeof data.partial === 'string') {
         broadcastPartialToTranslationSubscribers(recordId, data.partial)
